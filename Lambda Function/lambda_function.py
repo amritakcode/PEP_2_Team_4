@@ -19,7 +19,7 @@ def connect_to_rds_instance(region_name, db_instance_identifier):
         host = endpoint['Address']
         port = endpoint['Port']
         username = response['DBInstances'][0]['MasterUsername']
-        password = "hdMIcfoYeYNsbkm43Vhk"  # Replace with your actual password
+        password = ""  # Replace with your actual password
         
         # Print connection details
         print("Successfully connected to RDS instance:")
@@ -85,13 +85,13 @@ def import_data_to_rds(connection, s3_bucket, s3_key):
         
 def lambda_handler(event, context):
     try:
-        # Establish connection to MySQL RDS instance
+        # Establish connection to MySQL RDS instance (Insert Credentials)
         conn = mysql.connector.connect(
-            database="cardiovascular",
-            user="mavila0045",
-            password="hdMIcfoYeYNsbkm43Vhk",
-            host="cardiovascular-disease.cnq8osg2c5wd.us-west-1.rds.amazonaws.com",
-            port="3306"
+            database="",
+            user="",
+            password="",
+            host="",
+            port=""
         )
 
         # Get S3 bucket and key from event
