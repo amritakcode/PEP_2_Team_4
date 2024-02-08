@@ -19,7 +19,7 @@ def connect_to_rds_instance(region_name, db_instance_identifier):
         host = endpoint['Address']
         port = endpoint['Port']
         username = response['DBInstances'][0]['MasterUsername']
-        password = ""  # Replace with your actual password
+        password = "hdMIcfoYeYNsbkm43Vhk"  # Replace with your actual password
         
         # Print connection details
         print("Successfully connected to RDS instance:")
@@ -41,7 +41,6 @@ def import_data_to_rds(connection, s3_bucket, s3_key):
         s3 = boto3.client('s3')
         obj = s3.get_object(Bucket=s3_bucket, Key=s3_key)
         df = pd.read_csv(io.BytesIO(obj['Body'].read()), delimiter=';')
-        df.dropna(inplace=True)
 
         # Convert data types
         df['ap_hi'] = df['ap_hi'].astype(int)
@@ -53,45 +52,25 @@ def import_data_to_rds(connection, s3_bucket, s3_key):
         df['active'] = df['active'].astype(int)
         df['cardio'] = df['cardio'].astype(int)
 
-        # Create blood_info DataFrame with unique blood_id
-        blood_info = df[['ap_hi', 'ap_lo', 'cholesterol', 'gluc']].copy()
-        blood_info.reset_index(inplace=True)
-        blood_info.columns = ['blood_id', 'ap_hi', 'ap_low', 'cholesterol', 'glucose']
-
-        # Create habits DataFrame with unique habit_id
-        habits = df[['smoke', 'alco', 'active', 'cardio']].copy()
-        habits.reset_index(inplace=True)
-        habits.columns = ['habit_id', 'smoke', 'alcohol', 'activ', 'cardio']
-
-        # Create patient DataFrame
-        patient = df[['id', 'age', 'gender', 'height', 'weight']].copy()
+        # Data Cleaning
+        df.drop(df[(df['height'] > df['height'].quantile(0.975)) | (df['height'] < df['height'].quantile(0.025))].index,inplace=True)
+        df.drop(df[(df['weight'] > df['weight'].quantile(0.975)) | (df['weight'] < df['weight'].quantile(0.025))].index,inplace=True)
+        df.drop(df[(df['ap_hi'] > df['ap_hi'].quantile(0.975)) | (df['ap_hi'] < df['ap_hi'].quantile(0.025))].index,inplace=True)
+        df.drop(df[(df['ap_lo'] > df['ap_lo'].quantile(0.975)) | (df['ap_lo'] < df['ap_lo'].quantile(0.025))].index,inplace=True)
+        df['age'] = (df['age'] / 365).round().astype('int')
+        df.dropna(inplace=True)
+        df.drop_duplicates()
 
         # Open a cursor
         cursor = connection.cursor()
 
-        # Insert data into blood_info table
-        for index, row in blood_info.iterrows():
-            cursor.execute("""
-                INSERT INTO blood_info (blood_id, ap_hi, ap_low, cholesterol, glucose)
-                VALUES (%s, %s, %s, %s, %s);
-            """, (index, int(row['ap_hi']), int(row['ap_low']), int(row['cholesterol']), int(row['glucose'])))
+        # Insert data into tables
+        for index, row in df.iterrows():
+            cursor.execute("INSERT INTO habits (habit_id, smoke, alcohol, activ, cardio) VALUES (%s, %s, %s, %s, %s)", (index, int(row['smoke']), int(row['alco']), int(row['active']), int(row['cardio'])))
 
-        # Insert data into habits table
-        for index, row in habits.iterrows():
-            cursor.execute("""
-                INSERT INTO habits (habit_id, smoke, alcohol, activ, cardio)
-                VALUES (%s, %s, %s, %s, %s);
-            """, (index, int(row['smoke']), int(row['alcohol']), int(row['activ']), int(row['cardio'])))
+            cursor.execute("INSERT INTO blood_info (blood_id, ap_hi, ap_low, cholesterol, glucose) VALUES (%s, %s, %s, %s, %s)", (index, int(row['ap_hi']), int(row['ap_lo']), int(row['cholesterol']), int(row['gluc'])))
 
-        # Commit changes
-        connection.commit()
-
-        # Insert data into patient table
-        for index, row in patient.iterrows():
-            cursor.execute("""
-                INSERT INTO patient (patient_id, age, gender, height, weight, habit_id, blood_id)
-                VALUES (%s, %s, %s, %s, %s, %s, %s);
-            """, (int(row['id']), int(row['age']), int(row['gender']), int(row['height']), float(row['weight']), int(row.name), int(row.name)))
+            cursor.execute("INSERT INTO patient (patient_id, age, gender, height, weight, habit_id, blood_id) VALUES (%s, %s, %s, %s, %s, %s, %s)", (int(row['id']), int(row['age']), int(row['gender']), int(row['height']), float(row['weight']), index, index))
 
         # Commit changes
         connection.commit()
@@ -106,13 +85,13 @@ def import_data_to_rds(connection, s3_bucket, s3_key):
         
 def lambda_handler(event, context):
     try:
-        # Establish connection to MySQL RDS instance (Insert Database Credentials)
+        # Establish connection to MySQL RDS instance
         conn = mysql.connector.connect(
-            database="",
-            user="",
-            password="",
-            host="",
-            port=""
+            database="cardiovascular",
+            user="mavila0045",
+            password="hdMIcfoYeYNsbkm43Vhk",
+            host="cardiovascular-disease.cnq8osg2c5wd.us-west-1.rds.amazonaws.com",
+            port="3306"
         )
 
         # Get S3 bucket and key from event
